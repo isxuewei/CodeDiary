@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="src/main/resources/static/images/codeDiary.svg" alt="CodeDiary Logo" width="120" height="120">
+  <img src="https://code-diary.xuewei.fun/images/codeDiary.svg" alt="CodeDiary Logo" width="120" height="120">
   
   # CodeDiary
   
