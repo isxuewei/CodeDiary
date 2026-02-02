@@ -15,7 +15,7 @@
   CodeDiary 是一款基于 Git 提交记录的智能工作汇报插件，借助 AI 大模型的强大能力，<br>
   自动总结归纳你的代码提交，一键生成专业的工作报告。
   
-  [安装插件](#安装使用) · [查看文档](#功能特性) · [反馈问题](https://github.com/isxuewei/CodeDiary/issues)
+  [插件官网](https://code-diary.xuewei.fun/) · [反馈问题](https://github.com/isxuewei/CodeDiary/issues)
   
 </div>
 
