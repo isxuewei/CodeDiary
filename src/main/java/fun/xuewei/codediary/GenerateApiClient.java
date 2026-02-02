@@ -13,7 +13,7 @@ import java.util.List;
  */
 public final class GenerateApiClient {
 
-    private static final String BASE_URL = "http://xuewei.fun:8080/CodeDiary/generate";
+    private static final String BASE_URL = "https://code-diary.xuewei.fun/CodeDiary/generate";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
     /**
@@ -44,11 +44,54 @@ public final class GenerateApiClient {
             .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         String body = response.body();
-        int code = response.statusCode();
-        if (code < 200 || code >= 300) {
-            throw new RuntimeException("请求失败: HTTP " + code + (body != null && !body.isEmpty() ? " " + body : ""));
+        int statusCode = response.statusCode();
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new RuntimeException("请求失败: HTTP " + statusCode + (body != null && !body.isEmpty() ? " " + body : ""));
         }
-        return extractContent(body);
+        return parseResponse(body);
+    }
+
+    /**
+     * 解析后端响应：code 为 OK 时返回 data；否则返回「生成失败：message」供界面展示。
+     */
+    private static String parseResponse(String body) {
+        if (body == null || body.isEmpty()) return "";
+        body = body.trim();
+        if (!body.startsWith("{")) return body;
+        String code = extractJsonStringValue(body, "code");
+        if (code != null && !"OK".equals(code.trim())) {
+            String message = extractJsonStringValue(body, "message");
+            return "生成失败：" + (message != null && !message.isEmpty() ? message : code);
+        }
+        String data = extractJsonStringValue(body, "data");
+        return data != null ? data : body;
+    }
+
+    /** 从 JSON 字符串中取出指定 key 的字符串值（支持 \" \n \r \t \\ 等转义） */
+    private static String extractJsonStringValue(String body, String key) {
+        String search = "\"" + key + "\"";
+        int idx = body.indexOf(search);
+        if (idx == -1) return null;
+        int colon = body.indexOf(':', idx);
+        if (colon == -1) return null;
+        int start = body.indexOf('"', colon + 1);
+        if (start == -1) return null;
+        start += 1;
+        StringBuilder value = new StringBuilder();
+        for (int i = start; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (c == '\\' && i + 1 < body.length()) {
+                char next = body.charAt(i + 1);
+                if (next == '"') { value.append('"'); i++; continue; }
+                if (next == 'n') { value.append('\n'); i++; continue; }
+                if (next == 'r') { value.append('\r'); i++; continue; }
+                if (next == 't') { value.append('\t'); i++; continue; }
+                if (next == '\\') { value.append('\\'); i++; continue; }
+            }
+            if (c == '"') break;
+            value.append(c);
+        }
+        return value.toString();
     }
 
     private static String buildRequestBody(GenerateRequest req) {
@@ -89,36 +132,4 @@ public final class GenerateApiClient {
         return sb.toString();
     }
 
-    /** 从响应 JSON 中取出内容字段（如 data/content），否则返回原始 body */
-    private static String extractContent(String body) {
-        if (body == null || body.isEmpty()) return "";
-        body = body.trim();
-        if (!body.startsWith("{")) return body;
-        // 简单按 "data":" 或 "content":" 取第一个可打印内容
-        for (String key : new String[] { "\"data\"", "\"content\"", "\"result\"" }) {
-            int idx = body.indexOf(key);
-            if (idx == -1) continue;
-            int colon = body.indexOf(':', idx);
-            if (colon == -1) continue;
-            int start = body.indexOf('"', colon + 1);
-            if (start == -1) continue;
-            start += 1;
-            StringBuilder value = new StringBuilder();
-            for (int i = start; i < body.length(); i++) {
-                char c = body.charAt(i);
-                if (c == '\\' && i + 1 < body.length()) {
-                    char next = body.charAt(i + 1);
-                    if (next == '"') { value.append('"'); i++; continue; }
-                    if (next == 'n') { value.append('\n'); i++; continue; }
-                    if (next == 'r') { value.append('\r'); i++; continue; }
-                    if (next == 't') { value.append('\t'); i++; continue; }
-                    if (next == '\\') { value.append('\\'); i++; continue; }
-                }
-                if (c == '"') break;
-                value.append(c);
-            }
-            return value.toString();
-        }
-        return body;
-    }
 }

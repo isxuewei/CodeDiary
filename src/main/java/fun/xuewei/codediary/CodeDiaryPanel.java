@@ -198,9 +198,17 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
             }
         } else {
             SimpleDateFormat timeFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            // 获取今天的日期范围（用于判断是否为今天的提交）
+            LocalDate today = LocalDate.now();
+            long todayStartMillis = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            long todayEndMillis = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1;
+            
             for (CommitInfo c : commits) {
                 JCheckBox check = new JCheckBox();
                 check.putClientProperty(KEY_COMMIT_INFO, c);
+                // 默认选中今天的提交
+                boolean isToday = c.getCommitTimeMillis() >= todayStartMillis && c.getCommitTimeMillis() <= todayEndMillis;
+                check.setSelected(isToday);
                 String subject = c.getSubject();
 
                 JLabel hashLabel = new JLabel(c.getShortHash());
@@ -285,7 +293,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         Component[] comps = row.getComponents();
         for (int i = 0; i < comps.length; i++) {
             comps[i].addMouseListener(clickAdapter);
-            if (i == 0 || i == 3) comps[i].addMouseListener(hoverAdapter);
+            if (i == 3) comps[i].addMouseListener(hoverAdapter);
         }
     }
 
@@ -488,7 +496,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
     /** 弹出对话框展示生成结果或错误信息 */
     private void showGenerateResultDialog(String fullText) {
         JTextArea area = new JTextArea(fullText);
-        area.setEditable(false);
+        area.setEditable(true);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         area.setMargin(new Insets(8, 10, 8, 10));
@@ -507,7 +515,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         dialog.getContentPane().add(content);
         copyBtn.addActionListener(e -> {
             try {
-                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(fullText), null);
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(area.getText()), null);
                 JOptionPane.showMessageDialog(dialog, "复制成功。", "提示", JOptionPane.PLAIN_MESSAGE);
             } catch (Exception ignored) { }
         });

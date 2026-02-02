@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "fun.xuewei"
-version = "26.01.30"
+version = "26.02.02"
 
 repositories {
     mavenCentral()

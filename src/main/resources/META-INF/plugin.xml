@@ -26,7 +26,7 @@
         <li>一键生成日报：调用 CodeDiary 后端服务，生成后可一键复制</li>
       </ul>
       <p>在右侧工具窗口打开 CodeDiary，选择日期并查询提交，勾选后点击「生成」即可。</p>
-      <p>作者网站：http://xuewei.fun，公众号：薛伟同学</p>
+      <p>插件官网：https://code-diary.xuewei.fun，作者公众号：薛伟同学</p>
     ]]></description>
 
     <!-- Product and plugin compatibility requirements.

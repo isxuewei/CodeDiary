@@ -55,12 +55,12 @@ public final class GitTodayCommitsLoader {
                 ObjectId head = repo.resolve("HEAD");
                 if (head == null) return result;
                 walk.markStart(walk.parseCommit(head));
-                walk.sort(RevSort.REVERSE);
+                walk.sort(RevSort.COMMIT_TIME_DESC);
 
                 for (RevCommit c : walk) {
                     long timeMillis = c.getCommitTime() * 1000L;
-                    if (timeMillis < startMillis) continue;  // 还未到范围，跳过
-                    if (timeMillis > endMillis) break;       // 已超出范围，停止
+                    if (timeMillis > endMillis) continue;    // 还未到范围（太新），跳过
+                    if (timeMillis < startMillis) break;     // 已超出范围（太旧），停止
 
                     if (!userName.isEmpty() || !userEmail.isEmpty()) {
                         PersonIdent author = c.getAuthorIdent();
