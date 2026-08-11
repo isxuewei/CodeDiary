@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title th:text="${title}">CodeDiary - AI 生成工作日报与 Git 提交日志</title>
+    <meta content="CodeDiary 是一款 IntelliJ IDEA 插件，可根据 Git 提交记录生成工作日报，也能根据代码变更生成并回填 Git 提交日志。" name="description" th:content="${description}">
+    <link href="/images/codeDiary.svg" rel="icon" type="image/svg+xml">
+    <link crossorigin="anonymous" href="https://gw.alipayobjects.com/os/k/font/lxgwwenkaiscreenr.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'LXGW WenKai Screen R', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 
+                         'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #ffffff;
+            color: #2c3e50;
+            line-height: 1.8;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 40px;
+        }
+
+        /* 导航栏 */
+        nav {
+            padding: 30px 0;
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 600;
+            color: #2c3e50;
+            text-decoration: none;
+        }
+
+        .logo img {
+            width: 36px;
+            height: 36px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #7f8c8d;
+            text-decoration: none;
+            font-size: 15px;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #2c3e50;
+        }
+
+        /* 英雄区域 */
+        .hero {
+            text-align: center;
+            padding: 100px 0 60px;
+        }
+
+        .hero-logo {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 50px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            letter-spacing: -0.5px;
+            line-height: 1.3;
+        }
+
+        .hero-subtitle {
+            font-size: 18px;
+            color: #7f8c8d;
+            margin-bottom: 50px;
+            line-height: 1.8;
+            max-width: 680px;
+            margin-left: auto;
+            margin-right: auto;
+            font-weight: 400;
+        }
+
+        /* 标签 */
+        .tags {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 6px 16px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            font-size: 13px;
+            color: #6c757d;
+            font-weight: 400;
+        }
+
+        /* 按钮 */
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 100px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 6px;
+            font-size: 15px;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 400;
+        }
+
+        .btn-primary {
+            background: #2c3e50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1a252f;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border: 1px solid #e9ecef;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            border-color: #dee2e6;
+        }
+
+        /* 插画区域 */
+        .illustrations {
+            padding: 70px 0;
+            background: #fafbfc;
+        }
+
+        .illustration-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 50px;
+        }
+
+        .illustration-item {
+            text-align: center;
+        }
+
+        .illustration-item svg {
+            width: 160px;
+            height: 160px;
+            margin-bottom: 20px;
+            opacity: 0.95;
+        }
+
+        .illustration-item h3 {
+            font-size: 17px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .illustration-item p {
+            font-size: 14px;
+            color: #7f8c8d;
+            line-height: 1.7;
+        }
+
+        /* 功能特性 */
+        .features {
+            padding: 80px 0;
+            scroll-margin-top: 96px;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+        }
+
+        .section-intro {
+            max-width: 680px;
+            margin: 0 auto 50px;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .feature-grid {
+            max-width: 960px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .feature-card {
+            padding: 28px 30px 30px;
+            background: #fafbfc;
+            border: 1px solid #edf0f2;
+            border-radius: 12px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: #dce2e6;
+            box-shadow: 0 12px 32px rgba(44, 62, 80, 0.06);
+        }
+
+        .feature-label {
+            display: inline-block;
+            margin-bottom: 14px;
+            padding: 3px 10px;
+            color: #5f6f7a;
+            background: #eef1f3;
+            border-radius: 12px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            font-size: 15px;
+            color: #7f8c8d;
+            line-height: 1.8;
+        }
+
+        .feature-list {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        .feature-item {
+            padding: 35px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .feature-item:first-child {
+            padding-top: 0;
+        }
+
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+
+        .feature-item h3 {
+            font-size: 20px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .feature-item p {
+            font-size: 15px;
+            color: #7f8c8d;
+            line-height: 1.8;
+        }
+
+        .feature-item a {
+            color: #2c3e50;
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+
+        .feature-item a:hover {
+            color: #1a252f;
+        }
+
+        /* 页脚 */
+        footer {
+            padding: 50px 0;
+            text-align: center;
+            background: #fafbfc;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        footer p {
+            color: #95a5a6;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        footer a {
+            color: #7f8c8d;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        footer a:hover {
+            color: #2c3e50;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 20px;
+            }
+
+            .hero {
+                padding: 80px 0 40px;
+            }
+
+            .hero-logo {
+                width: 80px;
+                height: 80px;
+                margin-bottom: 40px;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+                margin-bottom: 24px;
+            }
+
+            .hero-subtitle {
+                font-size: 16px;
+                margin-bottom: 40px;
+            }
+
+            .tags {
+                gap: 10px;
+                margin-bottom: 30px;
+            }
+
+            .tag {
+                font-size: 12px;
+                padding: 5px 14px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .illustration-grid {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-title {
+                font-size: 28px;
+            }
+
+            .section-intro {
+                font-size: 15px;
+                margin-bottom: 36px;
+            }
+
+            .feature-card {
+                padding: 24px;
+            }
+
+            .buttons {
+                gap: 12px;
+                margin-bottom: 60px;
+            }
+
+            .btn {
+                padding: 10px 24px;
+                font-size: 14px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+
+            .feature-card,
+            .feature-item {
+                transition: none !important;
+            }
+        }
+
+        /* 图标 */
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+
+        /* 平滑滚动 */
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav>
+        <div class="container">
+            <div class="nav-content">
+                <a class="logo" href="#">
+                    <img alt="CodeDiary" src="/images/codeDiary.svg">
+                    <span>CodeDiary</span>
+                </a>
+                <ul class="nav-links">
+                    <li><a href="#features">功能</a></li>
+                    <li><a href="#install">安装</a></li>
+                    <li><a href="https://plugins.jetbrains.com/plugin/29992-codediary/edit/versions" target="_blank">下载</a></li>
+                    <li><a href="https://github.com/isxuewei/CodeDiary" target="_blank">Github</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 英雄区域 -->
+    <section class="hero">
+        <div class="container">
+            <img alt="CodeDiary" class="hero-logo" src="/images/codeDiary.svg">
+            <h1>让提交变成日报，让改动变成日志</h1>
+            <p class="hero-subtitle">
+                CodeDiary 直接工作在 IntelliJ IDEA 里：把真实 Git 提交整理成清晰的工作日报，也能读取已选代码变更，生成符合项目习惯的提交日志。少切换工具，把时间留给代码。
+            </p>
+            
+            <div class="tags">
+                <span class="tag">日报生成</span>
+                <span class="tag">Commit Message</span>
+                <span class="tag">多仓库</span>
+                <span class="tag">IntelliJ IDEA</span>
+            </div>
+            
+            <div class="buttons">
+                <a class="btn btn-primary" href="#install">
+                    <span>立即安装</span>
+                </a>
+                <a class="btn btn-secondary" href="https://plugins.jetbrains.com/plugin/29992-codediary/edit/versions" target="_blank">
+                    <span>下载</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 功能特性 -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">围绕 Git 的两条日常工作流</h2>
+            <p class="section-intro">写完代码后，CodeDiary 接住最容易打断思路的两件小事：整理今天做了什么，以及说明这次改了什么。</p>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <span class="feature-label">提交记录 → 工作日报</span>
+                    <h3>从真实提交生成日报</h3>
+                    <p>读取所选提交的完整信息，按项目分别交给 AI 总结。技术改动会被整理成清晰、可编辑的工作内容，生成后可直接复制。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">代码变更 → Commit Message</span>
+                    <h3>从代码差异生成提交日志</h3>
+                    <p>在 Commit 面板勾选本次变更，CodeDiary 会结合文件清单、代码差异和最近提交风格，生成提交日志并回填输入框。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">多仓库</span>
+                    <h3>一个项目里的仓库一起整理</h3>
+                    <p>自动扫描项目目录及子目录中的 Git 仓库，可查看全部仓库，也可单独筛选。跨仓库提交会按项目分别生成日报。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">时间与提交筛选</span>
+                    <h3>只选真正需要汇报的内容</h3>
+                    <p>支持今天、昨天、近一周、近一月和自定义日期范围，并按当前 Git 用户读取提交。列表可全选、逐条勾选，悬停还能核对完整详情。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">个性化格式</span>
+                    <h3>让输出适应你的团队</h3>
+                    <p>日报模板、Git 日志格式和语言风格要求都可以自行配置。设置保存在 IDE 本地，后续生成会继续沿用。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">IDE 内完成</span>
+                    <h3>不离开编码现场</h3>
+                    <p>日报入口位于 CodeDiary 工具窗口，提交日志入口就在 Commit 面板。查询、筛选、生成、编辑和复制都能在 IntelliJ IDEA 内完成。</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- 安装使用 -->
+    <section class="features" id="install">
+        <div class="container">
+            <h2 class="section-title">安装使用</h2>
+            <p class="section-intro">安装插件后，在右侧工具窗口打开 CodeDiary 即可开始。</p>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h3>IDEA 插件市场安装（推荐）</h3>
+                    <p>
+                        打开 IntelliJ IDEA → Settings/Preferences → Plugins → 搜索 "CodeDiary" → 点击 Install 安装 → 重启 IDE
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h3>手动安装</h3>
+                    <p>
+                        访问 <a href="https://plugins.jetbrains.com/plugin/29992-codediary" style="color: #2c3e50; text-decoration: underline;" target="_blank">JetBrains Marketplace</a>
+                        下载最新版本 → Settings/Preferences → Plugins → ⚙️ → Install Plugin from Disk → 选择下载的文件
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h3>生成工作日报</h3>
+                    <p>
+                        点击工具栏 CodeDiary 图标 → 选择时间范围和提交记录 → 点击生成 → 复制粘贴到汇报系统
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h3>生成 Git 提交日志</h3>
+                    <p>
+                        在 Commit 面板勾选代码变更 → 点击 CodeDiary 图标 → 等待生成结果自动回填提交消息输入框
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer>
+        <div class="container">
+            <p>© 2026 CodeDiary. Made with ❤️ by <a href="https://github.com/isxuewei/CodeDiary" target="_blank">薛伟同学</a></p>
+        </div>
+    </footer>
+
+    <script>
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            // 简单的淡入动画
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            // 为元素添加淡入效果
+            document.querySelectorAll('.illustration-item, .feature-card, .feature-item').forEach(item => {
+                item.style.opacity = '0';
+                item.style.transform = 'translateY(20px)';
+                item.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(item);
+            });
+        }
+    </script>
+</body>
+</html>

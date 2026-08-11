@@ -1,0 +1,62 @@
+# 操作系统生成文件
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IntelliJ IDEA / Eclipse / VS Code
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+.springBeans
+.sts4-cache/
+.vscode/
+
+# Maven 构建产物
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Gradle 构建产物与本地缓存
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# 日志与运行时文件
+logs/
+*.log
+*.log.*
+*.pid
+*.hprof
+hs_err_pid*
+
+# 本地环境变量和私有配置
+.env
+.env.*
+!.env.example
+!.env.template
+application-local.yml
+application-local.yaml
+application-*.local.yml
+application-*.local.yaml
+
+# 密钥、证书和签名文件
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+/code-diary-server/src/main/resources/application-dev.yml

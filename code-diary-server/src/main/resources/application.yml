@@ -1,0 +1,26 @@
+spring:
+  profiles:
+    active: dev
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    enabled: true
+
+# ========================================
+# Anthropic Messages 兼容 AI 接口配置
+# ========================================
+ai:
+  url: ${AI_URL:}
+  key: ${AI_KEY}
+  model: ${AI_MODEL}
+
+# ========================================
+# 每 IP 接口限流配置
+# ========================================
+rate-limit:
+  enabled: ${RATE_LIMIT_ENABLED:true}
+  requests-per-minute: ${RATE_LIMIT_REQUESTS_PER_MINUTE:60}
+  trust-forwarded-headers: ${RATE_LIMIT_TRUST_FORWARDED_HEADERS:false}

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="10 seconds">
+    <contextName>logback</contextName>
+
+    <!-- 配置日志文件输出路径，下面用${Path}占位使用} -->
+    <property name="Path" value="./logs/"/>
+
+    <!-- 日志格式和颜色渲染 -->
+    <!-- 彩色日志依赖的渲染类 -->
+    <conversionRule conversionWord="clr" converterClass="org.springframework.boot.logging.logback.ColorConverter"/>
+    <conversionRule conversionWord="wex"
+                    converterClass="org.springframework.boot.logging.logback.WhitespaceThrowableProxyConverter"/>
+    <conversionRule conversionWord="wEx"
+                    converterClass="org.springframework.boot.logging.logback.ExtendedWhitespaceThrowableProxyConverter"/>
+    <!-- 彩色日志格式 -->
+    <property name="LocalPatten"
+              value="${CONSOLE_LOG_PATTERN:-%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}}"/>
+
+    <!-- 文件日志格式 -->
+    <property name="FilePatten" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger - %msg%n"/>
+
+    <!-- 控制台输出日志格式 -->
+    <appender name="ConsoleLog" class="ch.qos.logback.core.ConsoleAppender">
+        <!--此日志appender是为开发使用，只配置最底级别，控制台输出的日志级别是大于或等于此级别的日志信息-->
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>info</level>
+        </filter>
+        <encoder>
+            <pattern>
+                ${LocalPatten}
+            </pattern>
+            <!-- 设置字符集 -->
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Info 文件输出日志 -->
+    <appender name="FileInfoLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>
+                ${FilePatten}
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <!-- 滚动输出策略 -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 路径 -->
+            <fileNamePattern>${Path}/info-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
+            <!-- 文件大小分割，超过配置大小就建当天新的日志文件 -->
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>10MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <!-- 保存7天 -->
+            <MaxHistory>7</MaxHistory>
+            <!-- 总日志大小 -->
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Warn 文件输出日志 -->
+    <appender name="FileWarnLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>WARN</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>
+                ${FilePatten}
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <!--滚动输出策略-->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!--路径-->
+            <fileNamePattern>${Path}/warn-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
+            <!-- 文件大小分割，超过配置大小就建当天新的日志文件 -->
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>10MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <!-- 保存30天 -->
+            <MaxHistory>30</MaxHistory>
+            <!-- 总日志大小 -->
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Error 文件输出日志 -->
+    <appender name="FileErrorLog" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <encoder>
+            <pattern>
+                ${FilePatten}
+            </pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <!--滚动输出策略-->
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <!-- 路径 -->
+            <fileNamePattern>${Path}/error-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
+            <!-- 文件大小分割，超过配置大小就建当天新的日志文件 -->
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>10MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+            <!-- 保存30天 -->
+            <MaxHistory>30</MaxHistory>
+            <!-- 总日志大小 -->
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- 开发环境配置 -->
+    <springProfile name="dev">
+        <root level="debug">
+            <appender-ref ref="ConsoleLog"/>
+            <appender-ref ref="FileInfoLog"/>
+            <appender-ref ref="FileWarnLog"/>
+            <appender-ref ref="FileErrorLog"/>
+        </root>
+    </springProfile>
+
+    <!-- 测试环境配置 -->
+    <springProfile name="test">
+        <root level="debug">
+            <appender-ref ref="ConsoleLog"/>
+            <appender-ref ref="FileInfoLog"/>
+            <appender-ref ref="FileWarnLog"/>
+            <appender-ref ref="FileErrorLog"/>
+        </root>
+    </springProfile>
+
+    <!-- 预发环境配置 -->
+    <springProfile name="pre">
+        <root level="info">
+            <appender-ref ref="ConsoleLog"/>
+            <appender-ref ref="FileInfoLog"/>
+            <appender-ref ref="FileWarnLog"/>
+            <appender-ref ref="FileErrorLog"/>
+        </root>
+    </springProfile>
+
+    <!-- 生产环境配置 -->
+    <springProfile name="prod">
+        <root level="info">
+            <appender-ref ref="ConsoleLog"/>
+            <appender-ref ref="FileInfoLog"/>
+            <appender-ref ref="FileWarnLog"/>
+            <appender-ref ref="FileErrorLog"/>
+        </root>
+    </springProfile>
+</configuration>
