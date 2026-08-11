@@ -28,6 +28,7 @@ public class CodeDiarySettings implements PersistentStateComponent<CodeDiaryStat
         this.state.setReportFormat(state.getReportFormat());
         this.state.setOtherContent(state.getOtherContent());
         this.state.setMachineCode(state.getMachineCode());
+        this.state.setGitCommitLogFormat(state.getGitCommitLogFormat());
     }
 
     public String getReportFormat() {
@@ -52,6 +53,14 @@ public class CodeDiarySettings implements PersistentStateComponent<CodeDiaryStat
 
     public void setMachineCode(String machineCode) {
         state.setMachineCode(machineCode);
+    }
+
+    public String getGitCommitLogFormat() {
+        return state.getGitCommitLogFormat();
+    }
+
+    public void setGitCommitLogFormat(String gitCommitLogFormat) {
+        state.setGitCommitLogFormat(gitCommitLogFormat);
     }
 
     public static CodeDiarySettings getInstance() {

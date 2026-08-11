@@ -7,11 +7,17 @@ public final class CommitInfo {
     private final String hash;
     private final String subject;
     private final long commitTimeMillis;
+    private final GitRepositoryInfo repository;
 
     public CommitInfo(String hash, String subject, long commitTimeMillis) {
+        this(hash, subject, commitTimeMillis, null);
+    }
+
+    public CommitInfo(String hash, String subject, long commitTimeMillis, GitRepositoryInfo repository) {
         this.hash = hash != null ? hash : "";
         this.subject = subject != null ? subject : "";
         this.commitTimeMillis = commitTimeMillis;
+        this.repository = repository;
     }
 
     public String getHash() {
@@ -29,5 +35,9 @@ public final class CommitInfo {
 
     public long getCommitTimeMillis() {
         return commitTimeMillis;
+    }
+
+    public GitRepositoryInfo getRepository() {
+        return repository;
     }
 }

@@ -5,6 +5,9 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.ui.components.JBScrollPane;
+import com.intellij.ui.components.JBTextArea;
+import com.intellij.util.IconUtil;
+import com.intellij.util.ui.JBFont;
 import com.intellij.util.ui.JBUI;
 
 import javax.swing.*;
@@ -14,12 +17,16 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.font.TextAttribute;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * CodeDiary 工具窗口的主面板。
@@ -34,38 +41,42 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
     private static final int COL_TIME_WIDTH = 120;
     private static final int HOVER_DELAY_MS = 400;
     private static final int HOVER_HIDE_DELAY_MS = 300;
+    private static final int CUSTOM_RANGE_INDEX = 4;
+    private static final float ACTION_ICON_SCALE = 1.25f;
 
     private final Project project;
     private final JPanel commitListPanel;
     private final JScrollPane listScrollPane;
-    private final JSpinner startDateSpinner;
-    private final JSpinner endDateSpinner;
-    private final JButton queryButton;
+    private final DateRangeSelector dateRangeSelector;
+    private final JComboBox<String> repositoryCombo;
+    private final Component repositoryGap;
+    private final Component customDateGap;
+    private final JButton refreshButton;
+    private final JCheckBox selectAllCheckBox;
     private final JComboBox<String> rangeCombo;
     private final JButton generateButton;
     private JWindow hoverDetailWindow;
     private Timer hoverShowTimer;
     private Timer hoverHideTimer;
     private JPanel hoverRow;
+    private List<GitRepositoryInfo> repositories = new ArrayList<>();
+    private boolean repositoriesScanned;
+    private long querySequence;
 
     public CodeDiaryPanel(Project project) {
         super(false, true);
         this.project = project;
         this.commitListPanel = new JPanel();
         this.listScrollPane = new JBScrollPane(commitListPanel);
-        this.startDateSpinner = createDateSpinner();
-        this.endDateSpinner = createDateSpinner();
-        this.queryButton = new JButton("查询");
-        this.rangeCombo = new JComboBox<>(new String[]{"今天", "最近3天", "最近7天", "最近30天", "最近90天"});
+        this.dateRangeSelector = new DateRangeSelector(LocalDate.now(), LocalDate.now());
+        this.repositoryCombo = new JComboBox<>();
+        this.repositoryGap = Box.createHorizontalStrut(JBUI.scale(4));
+        this.customDateGap = Box.createHorizontalStrut(JBUI.scale(4));
+        this.refreshButton = new JButton(AllIcons.Actions.Refresh);
+        this.selectAllCheckBox = new JCheckBox();
+        this.rangeCombo = new JComboBox<>(new String[]{"今天", "昨天", "近一周", "近一月", "自定义"});
         this.generateButton = new JButton("生成");
         initPanel();
-    }
-
-    private static JSpinner createDateSpinner() {
-        JSpinner spinner = new JSpinner(new SpinnerDateModel());
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "yyyy-MM-dd");
-        spinner.setEditor(editor);
-        return spinner;
     }
 
     private void initPanel() {
@@ -73,39 +84,69 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         content.setBorder(JBUI.Borders.empty(10));
 
         // 顶部：时间范围
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(4), JBUI.scale(4)));
-        top.add(new JLabel("开始:"));
-        top.add(startDateSpinner);
-        top.add(new JLabel("结束:"));
-        top.add(endDateSpinner);
-        queryButton.addActionListener(e -> loadCommitsAsync());
-        top.add(queryButton);
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, JBUI.scale(4)));
+        repositoryCombo.setFocusable(false);
+        repositoryCombo.setRenderer(createCenteredComboRenderer());
+        repositoryCombo.setVisible(false);
+        repositoryGap.setVisible(false);
+        repositoryCombo.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED && repositoriesScanned) {
+                loadCommitsAsync();
+            }
+        });
+        top.add(repositoryCombo);
+        top.add(repositoryGap);
+
+        rangeCombo.setFocusable(false);
+        rangeCombo.setRenderer(createCenteredComboRenderer());
         rangeCombo.setSelectedIndex(0);
         rangeCombo.addItemListener(e -> {
             if (e.getStateChange() == ItemEvent.SELECTED) {
-                setDateRangeFromCombo();
+                handleRangeSelection();
             }
         });
         top.add(rangeCombo);
+        dateRangeSelector.matchStyle(rangeCombo);
+        matchRangeComboHeight();
+        customDateGap.setVisible(false);
+        dateRangeSelector.setVisible(false);
+        dateRangeSelector.addPropertyChangeListener(DateRangeSelector.RANGE_PROPERTY, e -> queryCustomRange());
+        top.add(customDateGap);
+        top.add(dateRangeSelector);
+        top.add(Box.createHorizontalStrut(JBUI.scale(4)));
+        refreshButton.setToolTipText("重新扫描仓库并刷新提交记录");
+        refreshButton.setBorderPainted(false);
+        disableFocusHighlight(refreshButton);
+        refreshButton.setContentAreaFilled(false);
+        refreshButton.getAccessibleContext().setAccessibleName("刷新提交记录");
+        refreshButton.setIcon(IconUtil.scale(AllIcons.Actions.Refresh, refreshButton, ACTION_ICON_SCALE));
+        matchIconButtonSize(refreshButton);
+        refreshButton.addActionListener(e -> scanRepositoriesAsync());
+        top.add(refreshButton);
         content.add(top, BorderLayout.NORTH);
 
         // 中间：带多选框的提交列表
         commitListPanel.setLayout(new BoxLayout(commitListPanel, BoxLayout.Y_AXIS));
         listScrollPane.setPreferredSize(new Dimension(0, 220));
-        content.add(listScrollPane, BorderLayout.CENTER);
+        listScrollPane.setBorder(JBUI.Borders.empty());
+        JPanel commitTablePanel = new JPanel(new BorderLayout(0, JBUI.scale(4)));
+        commitTablePanel.add(createCommitHeader(), BorderLayout.NORTH);
+        commitTablePanel.add(listScrollPane, BorderLayout.CENTER);
+        content.add(commitTablePanel, BorderLayout.CENTER);
 
         // 底部：生成按钮 + 齿轮配置
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        disableFocusHighlight(generateButton);
+        matchGenerateButtonHeight();
         generateButton.addActionListener(e -> onGenerate());
         bottom.add(generateButton);
         JButton settingsBtn = new JButton(AllIcons.General.Gear);
+        disableFocusHighlight(settingsBtn);
         settingsBtn.setToolTipText("配置");
         settingsBtn.setBorderPainted(false);
-        settingsBtn.setFocusPainted(false);
         settingsBtn.setContentAreaFilled(false);
-        int iconSize = JBUI.scale(22);
-        settingsBtn.setPreferredSize(new Dimension(iconSize, iconSize));
-        settingsBtn.setMinimumSize(new Dimension(iconSize, iconSize));
+        settingsBtn.setIcon(IconUtil.scale(AllIcons.General.Gear, settingsBtn, ACTION_ICON_SCALE));
+        matchIconButtonSize(settingsBtn);
         settingsBtn.addActionListener(e -> showConfigDialog());
         bottom.add(settingsBtn);
         content.add(bottom, BorderLayout.SOUTH);
@@ -113,41 +154,215 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         setContent(content);
 
         setDefaultDateRange();
+        scanRepositoriesAsync();
+    }
+
+    private static DefaultListCellRenderer createCenteredComboRenderer() {
+        return new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus
+            ) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+                return label;
+            }
+        };
+    }
+
+    private void matchRangeComboHeight() {
+        Dimension comboSize = rangeCombo.getPreferredSize();
+        Insets comboInsets = rangeCombo.getInsets();
+        int visibleHeight = dateRangeSelector.getPreferredSize().height;
+        int comboHeight = visibleHeight + comboInsets.top + comboInsets.bottom;
+        Dimension matchedSize = new Dimension(comboSize.width, comboHeight);
+        rangeCombo.setPreferredSize(matchedSize);
+        rangeCombo.setMinimumSize(matchedSize);
+    }
+
+    private void matchGenerateButtonHeight() {
+        Dimension buttonSize = generateButton.getPreferredSize();
+        Dimension comboSize = rangeCombo.getPreferredSize();
+        Dimension matchedSize = new Dimension(buttonSize.width, comboSize.height);
+        generateButton.setPreferredSize(matchedSize);
+        generateButton.setMinimumSize(matchedSize);
+    }
+
+    private void matchIconButtonSize(AbstractButton button) {
+        int size = rangeCombo.getPreferredSize().height;
+        Dimension matchedSize = new Dimension(size, size);
+        button.setPreferredSize(matchedSize);
+        button.setMinimumSize(matchedSize);
+    }
+
+    private void scanRepositoriesAsync() {
+        long currentScan = ++querySequence;
+        repositoriesScanned = false;
+        commitListPanel.removeAll();
+        commitListPanel.add(new JLabel("正在扫描 Git 仓库..."));
+        commitListPanel.revalidate();
+        commitListPanel.repaint();
+        refreshButton.setEnabled(false);
+        generateButton.setEnabled(false);
+        selectAllCheckBox.setSelected(false);
+        selectAllCheckBox.setEnabled(false);
+        updateSelectAllPresentation();
+
+        ApplicationManager.getApplication().executeOnPooledThread(() -> {
+            List<GitRepositoryInfo> scannedRepositories;
+            try {
+                scannedRepositories = GitTodayCommitsLoader.scanRepositories(project);
+            } catch (Throwable ignored) {
+                scannedRepositories = new ArrayList<>();
+            }
+            List<GitRepositoryInfo> finalRepositories = scannedRepositories;
+            SwingUtilities.invokeLater(() -> {
+                if (currentScan != querySequence) return;
+                repositories = finalRepositories;
+                updateRepositorySelector();
+                repositoriesScanned = true;
+                generateButton.setEnabled(true);
+                loadCommitsAsync();
+            });
+        });
+    }
+
+    private void updateRepositorySelector() {
+        repositoryCombo.removeAllItems();
+        repositoryCombo.addItem("全部仓库");
+        for (GitRepositoryInfo repository : repositories) {
+            repositoryCombo.addItem(repository.getDisplayName());
+        }
+        repositoryCombo.setSelectedIndex(0);
+
+        boolean multipleRepositories = repositories.size() > 1;
+        repositoryCombo.setVisible(multipleRepositories);
+        repositoryGap.setVisible(multipleRepositories);
+        if (multipleRepositories) {
+            repositoryCombo.setPreferredSize(null);
+            repositoryCombo.setMinimumSize(null);
+            Dimension preferredSize = repositoryCombo.getPreferredSize();
+            Dimension rangeSize = rangeCombo.getPreferredSize();
+            Dimension matchedSize = new Dimension(preferredSize.width, rangeSize.height);
+            repositoryCombo.setPreferredSize(matchedSize);
+            repositoryCombo.setMinimumSize(matchedSize);
+        }
+        repositoryCombo.getParent().revalidate();
+        repositoryCombo.getParent().repaint();
+    }
+
+    private List<GitRepositoryInfo> getSelectedRepositories() {
+        int selectedIndex = repositoryCombo.getSelectedIndex();
+        if (repositories.size() <= 1 || selectedIndex <= 0) {
+            return new ArrayList<>(repositories);
+        }
+        int repositoryIndex = selectedIndex - 1;
+        if (repositoryIndex >= repositories.size()) return new ArrayList<>();
+        return Collections.singletonList(repositories.get(repositoryIndex));
+    }
+
+    private JPanel createCommitHeader() {
+        JPanel header = new JPanel(new GridBagLayout());
+        disableFocusHighlight(selectAllCheckBox);
+        selectAllCheckBox.setToolTipText("全选");
+        selectAllCheckBox.getAccessibleContext().setAccessibleName("全选");
+        selectAllCheckBox.addActionListener(e -> setAllCommitsSelected(selectAllCheckBox.isSelected()));
+
+        JLabel hashHeader = createHeaderLabel("Hash", COL_HASH_WIDTH);
+        JLabel timeHeader = createHeaderLabel("提交时间", COL_TIME_WIDTH);
+        JLabel messageHeader = createHeaderLabel("提交信息", 0);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(1, 0, 1, 4);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        header.add(selectAllCheckBox, gbc);
+        gbc.gridx = 1;
+        header.add(hashHeader, gbc);
+        gbc.gridx = 2;
+        header.add(timeHeader, gbc);
+        gbc.gridx = 3;
+        gbc.weightx = 1;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        header.add(messageHeader, gbc);
+        header.setBorder(JBUI.Borders.emptyBottom(2));
+        return header;
+    }
+
+    private static JLabel createHeaderLabel(String text, int width) {
+        JLabel label = new JLabel(text);
+        label.setFont(JBFont.label().deriveFont(Collections.singletonMap(
+            TextAttribute.WEIGHT,
+            TextAttribute.WEIGHT_EXTRABOLD
+        )));
+        if (width > 0) {
+            label.setPreferredSize(new Dimension(width, 22));
+            label.setMinimumSize(new Dimension(width, 22));
+        }
+        return label;
     }
 
     private void setDefaultDateRange() {
         rangeCombo.setSelectedIndex(0);
+        customDateGap.setVisible(false);
+        dateRangeSelector.setVisible(false);
         setDateRangeFromCombo();
     }
 
-    private void setDateRangeFromCombo() {
-        int days = getDaysFromRangeCombo();
-        LocalDate today = LocalDate.now();
-        LocalDate start = today.minusDays(days);
-        startDateSpinner.setValue(Date.from(start.atStartOfDay(ZoneId.systemDefault()).toInstant()));
-        endDateSpinner.setValue(Date.from(today.atStartOfDay(ZoneId.systemDefault()).toInstant()));
-        loadCommitsAsync();
+    private void handleRangeSelection() {
+        boolean customRange = isCustomRangeSelected();
+        customDateGap.setVisible(customRange);
+        dateRangeSelector.setVisible(customRange);
+        dateRangeSelector.getParent().revalidate();
+        dateRangeSelector.getParent().repaint();
+        if (!customRange) {
+            setDateRangeFromCombo();
+        }
     }
 
-    /** 根据下拉选项索引返回天数：今天=0, 最近3天=3, 最近7天=7, 最近30天=30, 最近90天=90 */
-    private int getDaysFromRangeCombo() {
+    private boolean isCustomRangeSelected() {
+        return rangeCombo.getSelectedIndex() == CUSTOM_RANGE_INDEX;
+    }
+
+    private void queryCustomRange() {
+        if (isCustomRangeSelected() && repositoriesScanned) {
+            loadCommitsAsync();
+        }
+    }
+
+    private void setDateRangeFromCombo() {
+        LocalDate today = LocalDate.now();
+        LocalDate start;
+        LocalDate end = today;
         switch (rangeCombo.getSelectedIndex()) {
-            case 1: return 3;
-            case 2: return 7;
-            case 3: return 30;
-            case 4: return 90;
-            default: return 0;
+            case 1:
+                start = today.minusDays(1);
+                end = start;
+                break;
+            case 2:
+                start = today.minusDays(6);
+                break;
+            case 3:
+                start = today.minusMonths(1);
+                break;
+            default:
+                start = today;
+                break;
+        }
+        dateRangeSelector.setRange(start, end);
+        if (repositoriesScanned) {
+            loadCommitsAsync();
         }
     }
 
     private void loadCommitsAsync() {
-        Date start = (Date) startDateSpinner.getValue();
-        Date end = (Date) endDateSpinner.getValue();
-        if (start.after(end)) {
-            JOptionPane.showMessageDialog(this, "开始日期不能晚于结束日期。", "提示", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        long startMillis = start.getTime();
+        long currentQuery = ++querySequence;
+        List<GitRepositoryInfo> selectedRepositories = getSelectedRepositories();
+        LocalDate start = dateRangeSelector.getStartDate();
+        LocalDate end = dateRangeSelector.getEndDate();
+        long startMillis = start.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
         long endMillis = endOfDay(end);
 
         // 立即显示「加载中」，让用户看到有反应
@@ -157,18 +372,25 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         commitListPanel.repaint();
         listScrollPane.revalidate();
         listScrollPane.repaint();
-        queryButton.setEnabled(false);
+        refreshButton.setEnabled(false);
+        selectAllCheckBox.setSelected(false);
+        selectAllCheckBox.setEnabled(false);
+        updateSelectAllPresentation();
 
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             List<CommitInfo> commits;
             try {
-                commits = GitTodayCommitsLoader.loadCommitsForCurrentUser(project, startMillis, endMillis);
+                commits = GitTodayCommitsLoader.loadCommitsForCurrentUser(selectedRepositories, startMillis, endMillis);
             } catch (Throwable t) {
                 commits = new ArrayList<>();
             }
             List<CommitInfo> finalCommits = commits;
             // 回到 EDT 更新列表，不传 ModalityState 避免在某些情况下不执行
-            SwingUtilities.invokeLater(() -> applyCommitList(finalCommits));
+            SwingUtilities.invokeLater(() -> {
+                if (currentQuery == querySequence) {
+                    applyCommitList(finalCommits);
+                }
+            });
         });
     }
 
@@ -185,7 +407,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
             commitListPanel.add(hintTitle);
             int leftGap = JBUI.scale(12);
             String[] hints = {
-                "项目根目录为 Git 仓库",
+                "项目目录或任意子目录中存在 Git 仓库",
                 "已配置 git user.name / user.email",
                 "所选日期内有您的提交"
             };
@@ -198,18 +420,18 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
             }
         } else {
             SimpleDateFormat timeFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-            // 获取今天的日期范围（用于判断是否为今天的提交）
-            LocalDate today = LocalDate.now();
-            long todayStartMillis = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-            long todayEndMillis = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1;
-            
+            boolean showRepositoryName = repositories.size() > 1 && repositoryCombo.getSelectedIndex() == 0;
+
             for (CommitInfo c : commits) {
                 JCheckBox check = new JCheckBox();
+                disableFocusHighlight(check);
                 check.putClientProperty(KEY_COMMIT_INFO, c);
-                // 默认选中今天的提交
-                boolean isToday = c.getCommitTimeMillis() >= todayStartMillis && c.getCommitTimeMillis() <= todayEndMillis;
-                check.setSelected(isToday);
+                check.setSelected(true);
+                check.addItemListener(e -> updateSelectAllState());
                 String subject = c.getSubject();
+                String displayedSubject = showRepositoryName && c.getRepository() != null
+                    ? "[" + c.getRepository().getDisplayName() + "] " + subject
+                    : subject;
 
                 JLabel hashLabel = new JLabel(c.getShortHash());
                 hashLabel.setPreferredSize(new Dimension(COL_HASH_WIDTH, 22));
@@ -219,7 +441,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
                 timeLabel.setPreferredSize(new Dimension(COL_TIME_WIDTH, 22));
                 timeLabel.setMinimumSize(new Dimension(COL_TIME_WIDTH, 22));
 
-                JLabel msgLabel = new JLabel(subject != null ? subject : "");
+                JLabel msgLabel = new JLabel(displayedSubject != null ? displayedSubject : "");
                 msgLabel.setToolTipText(subject);
 
                 JPanel row = new JPanel(new GridBagLayout());
@@ -248,7 +470,51 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         commitListPanel.repaint();
         listScrollPane.revalidate();
         listScrollPane.repaint();
-        queryButton.setEnabled(true);
+        refreshButton.setEnabled(true);
+        updateSelectAllState();
+    }
+
+    private void setAllCommitsSelected(boolean selected) {
+        for (Component component : commitListPanel.getComponents()) {
+            if (!(component instanceof JPanel)) continue;
+            for (Component rowComponent : ((JPanel) component).getComponents()) {
+                if (rowComponent instanceof JCheckBox) {
+                    ((JCheckBox) rowComponent).setSelected(selected);
+                    break;
+                }
+            }
+        }
+        updateSelectAllState();
+    }
+
+    private void updateSelectAllState() {
+        int totalCount = 0;
+        int selectedCount = 0;
+        for (Component component : commitListPanel.getComponents()) {
+            if (!(component instanceof JPanel)) continue;
+            for (Component rowComponent : ((JPanel) component).getComponents()) {
+                if (rowComponent instanceof JCheckBox) {
+                    totalCount++;
+                    if (((JCheckBox) rowComponent).isSelected()) selectedCount++;
+                    break;
+                }
+            }
+        }
+        boolean hasCommits = totalCount > 0;
+        selectAllCheckBox.setSelected(hasCommits && selectedCount == totalCount);
+        selectAllCheckBox.setEnabled(hasCommits);
+        updateSelectAllPresentation();
+    }
+
+    private void updateSelectAllPresentation() {
+        String actionText = selectAllCheckBox.isSelected() ? "取消全选" : "全选";
+        selectAllCheckBox.setToolTipText(actionText);
+        selectAllCheckBox.getAccessibleContext().setAccessibleName(actionText);
+    }
+
+    private static void disableFocusHighlight(AbstractButton button) {
+        button.setFocusPainted(false);
+        button.setFocusable(false);
     }
 
     /** 为整行及行内子组件添加悬浮监听（hash、时间上不显示详情）、点击行联动多选 */
@@ -316,7 +582,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
 
     private void showHoverDetail(JPanel row, CommitInfo c) {
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            String detail = GitTodayCommitsLoader.getCommitDetail(project, c.getHash());
+            String detail = GitTodayCommitsLoader.getCommitDetail(c);
             SwingUtilities.invokeLater(() -> {
                 if (hoverRow != row) return;
                 hideHoverDetail();
@@ -358,80 +624,100 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         }
     }
 
-    private static long endOfDay(Date date) {
-        LocalDate d = date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        return d.atTime(23, 59, 59, 999_000_000).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    private static long endOfDay(LocalDate date) {
+        return date.atTime(23, 59, 59, 999_000_000).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
     }
 
     private void showConfigDialog() {
         CodeDiarySettings settings = CodeDiarySettings.getInstance();
-        JPanel configPanel = new JPanel(new BorderLayout(JBUI.scale(8), JBUI.scale(8)));
-        configPanel.setBorder(JBUI.Borders.empty(16));
+        JPanel configPanel = new JPanel(new BorderLayout(0, JBUI.scale(12)));
+        configPanel.setBorder(JBUI.Borders.empty(12));
 
-        // 日报格式
-        JLabel formatLabel = new JLabel("日报格式");
-        JLabel formatHint = new JLabel("可配置生成日报的格式模板，供 AI 模仿。");
-        formatHint.setForeground(new Color(128, 128, 128));
-        formatHint.setFont(formatHint.getFont().deriveFont(11f));
-        JTextArea formatArea = new JTextArea(6, 40);
-        formatArea.setLineWrap(true);
-        formatArea.setWrapStyleWord(true);
-        formatArea.setMargin(new Insets(6, 8, 6, 8));
-        formatArea.setText(settings.getReportFormat() != null ? settings.getReportFormat() : "");
+        JBTextArea formatArea = createConfigTextArea(
+            settings.getReportFormat() != null ? settings.getReportFormat() : ""
+        );
+        JBTextArea commitLogFormatArea = createConfigTextArea(
+            settings.getGitCommitLogFormat() != null ? settings.getGitCommitLogFormat() : ""
+        );
+        JBTextArea otherArea = createConfigTextArea(
+            settings.getOtherContent() != null ? settings.getOtherContent() : ""
+        );
 
-        // 其他内容
-        JLabel otherLabel = new JLabel("其他内容");
-        JLabel otherHint = new JLabel("任何想要补充告诉 AI 的内容。");
-        otherHint.setForeground(new Color(128, 128, 128));
-        otherHint.setFont(otherHint.getFont().deriveFont(11f));
-        JTextArea otherArea = new JTextArea(4, 40);
-        otherArea.setLineWrap(true);
-        otherArea.setWrapStyleWord(true);
-        otherArea.setMargin(new Insets(6, 8, 6, 8));
-        otherArea.setText(settings.getOtherContent() != null ? settings.getOtherContent() : "");
-
-        JPanel content = new JPanel();
-        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        int gap = JBUI.scale(12);
-        JPanel formatBlock = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-        formatBlock.add(formatLabel, BorderLayout.NORTH);
-        formatBlock.add(formatHint, BorderLayout.CENTER);
-        content.add(formatBlock);
-        content.add(Box.createVerticalStrut(JBUI.scale(4)));
-        content.add(new JBScrollPane(formatArea));
-        content.add(Box.createVerticalStrut(gap));
-        JPanel otherBlock = new JPanel(new BorderLayout(0, JBUI.scale(4)));
-        otherBlock.add(otherLabel, BorderLayout.NORTH);
-        otherBlock.add(otherHint, BorderLayout.CENTER);
-        content.add(otherBlock);
-        content.add(Box.createVerticalStrut(JBUI.scale(4)));
-        content.add(new JBScrollPane(otherArea));
-
-        JScrollPane contentScroll = new JBScrollPane(content);
-        contentScroll.setBorder(JBUI.Borders.empty());
-        configPanel.add(contentScroll, BorderLayout.CENTER);
+        JTabbedPane tabs = new JTabbedPane(SwingConstants.TOP);
+        tabs.addTab(
+            "日报格式",
+            createConfigTab(
+                "AI 将参考此模板，把所选 Git 提交整理成日报；可以直接调整字段、序号和排版。",
+                formatArea
+            )
+        );
+        tabs.addTab(
+            "Git 日志格式",
+            createConfigTab(
+                "点击 Commit 面板中的 CodeDiary 图标时，AI 将按此格式生成并回填提交消息。",
+                commitLogFormatArea
+            )
+        );
+        tabs.addTab(
+            "其他补充内容",
+            createConfigTab(
+                "补充语言、命名、内容风格等个性化要求，生成日报时会一并发送给 AI。",
+                otherArea
+            )
+        );
+        configPanel.add(tabs, BorderLayout.CENTER);
 
         JButton saveBtn = new JButton("保存");
         JButton closeBtn = new JButton("关闭");
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
+        south.setBorder(JBUI.Borders.emptyTop(2));
         south.add(saveBtn);
         south.add(closeBtn);
         configPanel.add(south, BorderLayout.SOUTH);
 
         JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "配置 CodeDiary", Dialog.ModalityType.APPLICATION_MODAL);
         dialog.getContentPane().add(configPanel);
-        dialog.setMinimumSize(new Dimension(420, 420));
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.getRootPane().setDefaultButton(saveBtn);
+        dialog.setMinimumSize(new Dimension(JBUI.scale(640), JBUI.scale(400)));
 
         saveBtn.addActionListener(e -> {
             settings.setReportFormat(formatArea.getText().trim());
+            settings.setGitCommitLogFormat(commitLogFormatArea.getText().trim());
             settings.setOtherContent(otherArea.getText().trim());
             dialog.dispose();
         });
         closeBtn.addActionListener(e -> dialog.dispose());
 
         dialog.pack();
+        dialog.setSize(new Dimension(JBUI.scale(700), JBUI.scale(460)));
         dialog.setLocationRelativeTo(this);
+        SwingUtilities.invokeLater(formatArea::requestFocusInWindow);
         dialog.setVisible(true);
+    }
+
+    private static JBTextArea createConfigTextArea(String text) {
+        JBTextArea area = new JBTextArea(text, 12, 48);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setMargin(JBUI.insets(10, 12));
+        area.getAccessibleContext().setAccessibleDescription("CodeDiary 配置内容编辑区");
+        return area;
+    }
+
+    private static JPanel createConfigTab(String hint, JTextArea area) {
+        JPanel tab = new JPanel(new BorderLayout(0, JBUI.scale(10)));
+        tab.setBorder(JBUI.Borders.empty(14, 12, 12, 12));
+
+        JLabel hintLabel = new JLabel(hint);
+        Color hintColor = UIManager.getColor("Label.disabledForeground");
+        hintLabel.setForeground(hintColor != null ? hintColor : new Color(128, 128, 128));
+        tab.add(hintLabel, BorderLayout.NORTH);
+
+        JBScrollPane scrollPane = new JBScrollPane(area);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        tab.add(scrollPane, BorderLayout.CENTER);
+        return tab;
     }
 
     private void onGenerate() {
@@ -455,35 +741,31 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
             JOptionPane.showMessageDialog(this, "请至少勾选一条提交记录。", "提示", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        Map<GitRepositoryInfo, List<CommitInfo>> commitsByRepository = groupCommitsByRepository(selected);
+        if (commitsByRepository.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "无法确定所选提交所属的 Git 仓库。", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         CodeDiarySettings settings = CodeDiarySettings.getInstance();
         String machineCode = settings.getMachineCode();
         if (machineCode == null || machineCode.isEmpty()) {
             machineCode = java.util.UUID.randomUUID().toString();
             settings.setMachineCode(machineCode);
         }
-        List<String> commits = new ArrayList<>();
-        SimpleDateFormat timeFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-        for (CommitInfo c : selected) {
-            String detail = GitTodayCommitsLoader.getCommitDetail(project, c.getHash());
-            commits.add(detail != null ? detail : (c.getShortHash() + " " + timeFmt.format(new Date(c.getCommitTimeMillis())) + " " + (c.getSubject() != null ? c.getSubject() : "")));
-        }
-        GenerateApiClient.GenerateRequest req = new GenerateApiClient.GenerateRequest();
-        req.machineCode = machineCode;
-        req.clientVersion = "26.01.30";
-        req.projectName = project.getName() != null ? project.getName() : "";
-        req.commits = commits;
-        req.reportFormat = settings.getReportFormat() != null ? settings.getReportFormat() : "";
-        req.otherContent = settings.getOtherContent() != null ? settings.getOtherContent() : "";
+        String finalMachineCode = machineCode;
+        String reportFormat = settings.getReportFormat() != null ? settings.getReportFormat() : "";
+        String otherContent = settings.getOtherContent() != null ? settings.getOtherContent() : "";
 
         generateButton.setEnabled(false);
         generateButton.setText("生成中...");
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
-            String result;
-            try {
-                result = GenerateApiClient.generate(req);
-            } catch (Throwable t) {
-                result = "生成失败: " + (t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName());
-            }
+            String result = generateReportsByRepository(
+                commitsByRepository,
+                finalMachineCode,
+                reportFormat,
+                otherContent
+            );
             String finalResult = result;
             SwingUtilities.invokeLater(() -> {
                 generateButton.setText("生成");
@@ -491,6 +773,65 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
                 showGenerateResultDialog(finalResult);
             });
         });
+    }
+
+    private Map<GitRepositoryInfo, List<CommitInfo>> groupCommitsByRepository(List<CommitInfo> commits) {
+        Map<GitRepositoryInfo, List<CommitInfo>> grouped = new LinkedHashMap<>();
+        for (GitRepositoryInfo repository : repositories) {
+            List<CommitInfo> repositoryCommits = new ArrayList<>();
+            for (CommitInfo commit : commits) {
+                if (repository.equals(commit.getRepository())) {
+                    repositoryCommits.add(commit);
+                }
+            }
+            if (!repositoryCommits.isEmpty()) {
+                grouped.put(repository, repositoryCommits);
+            }
+        }
+        return grouped;
+    }
+
+    private String generateReportsByRepository(
+        Map<GitRepositoryInfo, List<CommitInfo>> commitsByRepository,
+        String machineCode,
+        String reportFormat,
+        String otherContent
+    ) {
+        List<String> reports = new ArrayList<>();
+        for (Map.Entry<GitRepositoryInfo, List<CommitInfo>> entry : commitsByRepository.entrySet()) {
+            GitRepositoryInfo repository = entry.getKey();
+            GenerateApiClient.GenerateRequest request = new GenerateApiClient.GenerateRequest();
+            request.machineCode = machineCode;
+            request.clientVersion = "26.01.30";
+            request.projectName = repository.getName();
+            request.commits = loadCommitDetails(entry.getValue());
+            request.reportFormat = reportFormat;
+            request.otherContent = otherContent;
+
+            try {
+                String report = GenerateApiClient.generate(request);
+                reports.add(report != null ? report.trim() : "");
+            } catch (Throwable t) {
+                String message = t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
+                reports.add("项目名称：" + repository.getName() + "\n\n生成失败：" + message);
+            }
+        }
+        return String.join("\n\n", reports);
+    }
+
+    private static List<String> loadCommitDetails(List<CommitInfo> commits) {
+        List<String> details = new ArrayList<>();
+        SimpleDateFormat timeFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+        for (CommitInfo commit : commits) {
+            String detail = GitTodayCommitsLoader.getCommitDetail(commit);
+            if (detail == null || detail.startsWith("读取失败:") || detail.startsWith("未找到提交:")) {
+                detail = commit.getShortHash() + " "
+                    + timeFormat.format(new Date(commit.getCommitTimeMillis())) + " "
+                    + commit.getSubject();
+            }
+            details.add(detail);
+        }
+        return details;
     }
 
     /** 弹出对话框展示生成结果或错误信息 */
@@ -504,6 +845,8 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         scroll.setPreferredSize(new Dimension(520, 360));
         JButton copyBtn = new JButton("复制");
         JButton closeBtn = new JButton("关闭");
+        disableFocusHighlight(copyBtn);
+        disableFocusHighlight(closeBtn);
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, JBUI.scale(8), 0));
         south.add(copyBtn);
         south.add(closeBtn);
