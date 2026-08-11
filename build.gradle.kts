@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "fun.xuewei"
-version = "26.02.02"
+version = "26.08.12"
 
 repositories {
     mavenCentral()
@@ -24,6 +24,9 @@ dependencies {
     implementation("org.eclipse.jgit:org.eclipse.jgit:6.7.0.202309050840-r") {
         exclude(group = "org.slf4j")
     }
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks {
@@ -31,6 +34,19 @@ tasks {
     withType<JavaCompile> {
         sourceCompatibility = "11"
         targetCompatibility = "11"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+
+    buildSearchableOptions {
+        enabled = false
+    }
+
+    runIde {
+        // 沙箱 IDE 视为本地环境，生成请求转发到本机启动的服务端。
+        systemProperty("codediary.environment", "local")
     }
 
     patchPluginXml {

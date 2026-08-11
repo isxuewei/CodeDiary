@@ -13,7 +13,11 @@ import java.util.List;
  */
 public final class GenerateApiClient {
 
-    private static final String BASE_URL = "https://code-diary.xuewei.fun/CodeDiary/generate";
+    private static final String ENVIRONMENT_PROPERTY = "codediary.environment";
+    private static final String LOCAL_ENVIRONMENT = "local";
+    private static final String LOCAL_BASE_URL = "http://localhost:8080/CodeDiary/generate";
+    private static final String PRODUCTION_BASE_URL = "https://code-diary.xuewei.fun/CodeDiary/generate";
+    private static final String GIT_COMMIT_LOG_PATH = "/CodeDiary/generateGitCommitLog";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
 
     /**
@@ -28,16 +32,36 @@ public final class GenerateApiClient {
         public String otherContent;
     }
 
+    /** Git 提交日志生成请求。 */
+    public static class GitCommitLogRequest {
+        public String machineCode;
+        public String clientVersion;
+        public String projectName;
+        public List<String> recentCommits;
+        public List<String> changes;
+        public String commitLogFormat;
+    }
+
     /**
      * 调用生成接口，返回生成的日报内容；失败时抛出异常或返回错误信息。
      */
     public static String generate(GenerateRequest req) throws Exception {
         String json = buildRequestBody(req);
+        return post(resolveBaseUrl(), json);
+    }
+
+    /** 调用 Git 提交日志生成接口。 */
+    public static String generateGitCommitLog(GitCommitLogRequest req) throws Exception {
+        String json = buildGitCommitLogRequestBody(req);
+        return post(resolveGitCommitLogUrl(), json);
+    }
+
+    private static String post(String url, String json) throws Exception {
         HttpClient client = HttpClient.newBuilder()
             .connectTimeout(REQUEST_TIMEOUT)
             .build();
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(BASE_URL))
+            .uri(URI.create(url))
             .header("Content-Type", "application/json; charset=UTF-8")
             .timeout(REQUEST_TIMEOUT)
             .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
@@ -49,6 +73,24 @@ public final class GenerateApiClient {
             throw new RuntimeException("请求失败: HTTP " + statusCode + (body != null && !body.isEmpty() ? " " + body : ""));
         }
         return parseResponse(body);
+    }
+
+    /**
+     * Gradle 的 runIde 任务会把当前环境标记为 local；安装后的插件默认使用线上服务。
+     */
+    static String resolveBaseUrl() {
+        String environment = System.getProperty(ENVIRONMENT_PROPERTY, "");
+        return LOCAL_ENVIRONMENT.equalsIgnoreCase(environment.trim())
+            ? LOCAL_BASE_URL
+            : PRODUCTION_BASE_URL;
+    }
+
+    static String resolveGitCommitLogUrl() {
+        String environment = System.getProperty(ENVIRONMENT_PROPERTY, "");
+        String origin = LOCAL_ENVIRONMENT.equalsIgnoreCase(environment.trim())
+            ? "http://localhost:8080"
+            : "https://code-diary.xuewei.fun";
+        return origin + GIT_COMMIT_LOG_PATH;
     }
 
     /**
@@ -111,6 +153,29 @@ public final class GenerateApiClient {
         sb.append(",\"otherContent\":").append(escapeJson(req.otherContent != null ? req.otherContent : ""));
         sb.append("}");
         return sb.toString();
+    }
+
+    static String buildGitCommitLogRequestBody(GitCommitLogRequest req) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"machineCode\":").append(escapeJson(req.machineCode));
+        sb.append(",\"clientVersion\":").append(escapeJson(req.clientVersion));
+        sb.append(",\"projectName\":").append(escapeJson(req.projectName != null ? req.projectName : ""));
+        appendStringList(sb, "recentCommits", req.recentCommits);
+        appendStringList(sb, "changes", req.changes);
+        sb.append(",\"commitLogFormat\":").append(escapeJson(req.commitLogFormat != null ? req.commitLogFormat : ""));
+        sb.append("}");
+        return sb.toString();
+    }
+
+    private static void appendStringList(StringBuilder sb, String fieldName, List<String> values) {
+        sb.append(",\"").append(fieldName).append("\":[");
+        if (values != null) {
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) sb.append(',');
+                sb.append(escapeJson(values.get(i)));
+            }
+        }
+        sb.append(']');
     }
 
     private static String escapeJson(String s) {
