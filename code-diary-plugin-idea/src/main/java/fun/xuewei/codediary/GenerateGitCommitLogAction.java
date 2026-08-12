@@ -2,11 +2,13 @@ package fun.xuewei.codediary;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.util.IconLoader;
 import com.intellij.openapi.vcs.CommitMessageI;
 import com.intellij.openapi.vcs.FilePath;
 import com.intellij.openapi.vcs.ProjectLevelVcsManager;
@@ -15,13 +17,17 @@ import com.intellij.openapi.vcs.changes.Change;
 import com.intellij.vcs.commit.AbstractCommitWorkflowHandler;
 import com.intellij.vcs.commit.CommitWorkflowHandler;
 import com.intellij.vcs.commit.CommitWorkflowUi;
+import com.intellij.ui.AnimatedIcon;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Commit 消息工具栏入口：根据当前勾选的 Git 变更生成提交日志并回填消息框。
@@ -30,6 +36,15 @@ public final class GenerateGitCommitLogAction extends AnAction {
 
     private static final String CLIENT_VERSION = "26.08.12";
     private static final int RECENT_COMMIT_LIMIT = 10;
+    private static final String ACTION_TEXT = "生成 Git 提交日志";
+    private static final String GENERATING_TEXT = "正在生成 Git 提交日志…";
+    private static final Icon ACTION_ICON = IconLoader.getIcon(
+        "/icons/codeDiary.svg",
+        GenerateGitCommitLogAction.class
+    );
+    private static final Icon GENERATING_ICON = AnimatedIcon.Default.INSTANCE;
+
+    private final Set<Project> generatingProjects = ConcurrentHashMap.newKeySet();
 
     @Override
     public void update(@NotNull AnActionEvent e) {
@@ -37,8 +52,13 @@ public final class GenerateGitCommitLogAction extends AnAction {
         boolean gitActive = project != null
             && ProjectLevelVcsManager.getInstance(project).checkVcsIsActive("Git");
         CommitTarget target = resolveCommitTarget(e);
+        boolean generating = project != null && generatingProjects.contains(project);
         e.getPresentation().setVisible(gitActive);
-        e.getPresentation().setEnabled(gitActive && target.canWriteMessage() && target.hasIncludedFiles());
+        updatePresentation(
+            e.getPresentation(),
+            generating,
+            gitActive && target.canWriteMessage() && target.hasIncludedFiles()
+        );
     }
 
     @Override
@@ -55,6 +75,10 @@ public final class GenerateGitCommitLogAction extends AnAction {
             Messages.showWarningDialog(project, "未找到可回填的提交消息输入框。", "CodeDiary");
             return;
         }
+        if (!generatingProjects.add(project)) return;
+
+        Presentation presentation = e.getPresentation();
+        updatePresentation(presentation, true, false);
 
         CodeDiarySettings settings = CodeDiarySettings.getInstance();
         String machineCode = settings.getMachineCode();
@@ -129,7 +153,24 @@ public final class GenerateGitCommitLogAction extends AnAction {
                     Messages.showErrorDialog(project, "Git 提交日志生成失败：" + message, "CodeDiary");
                 }
             }
+
+            @Override
+            public void onFinished() {
+                generatingProjects.remove(project);
+                updatePresentation(
+                    presentation,
+                    false,
+                    !project.isDisposed() && target.canWriteMessage() && target.hasIncludedFiles()
+                );
+            }
         });
+    }
+
+    private static void updatePresentation(Presentation presentation, boolean generating, boolean enabled) {
+        presentation.setIcon(generating ? GENERATING_ICON : ACTION_ICON);
+        presentation.setText(generating ? GENERATING_TEXT : ACTION_TEXT);
+        presentation.setDescription(generating ? GENERATING_TEXT : "根据已选择的代码变更生成 Git 提交日志");
+        presentation.setEnabled(!generating && enabled);
     }
 
     private static CommitTarget resolveCommitTarget(AnActionEvent e) {
