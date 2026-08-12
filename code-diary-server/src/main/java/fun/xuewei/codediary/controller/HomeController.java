@@ -16,8 +16,8 @@ public class HomeController {
 
     @GetMapping
     public String home(Model model) {
-        model.addAttribute("title", "CodeDiary - AI 生成工作日报与 Git 提交日志");
-        model.addAttribute("description", "CodeDiary 是一款 IntelliJ IDEA 插件，可根据 Git 提交记录生成工作日报，也能根据代码变更生成并回填 Git 提交日志。");
+        model.addAttribute("title", "CodeDiary - AI 生成 Git 提交日志与工作日报");
+        model.addAttribute("description", "CodeDiary 是一款 IntelliJ IDEA 插件，可先根据代码变更生成并回填 Git 提交日志，再根据 Git 提交记录生成工作日报。");
         return "index";
     }
 }

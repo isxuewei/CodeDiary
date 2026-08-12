@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title th:text="${title}">CodeDiary - AI 生成工作日报与 Git 提交日志</title>
-    <meta content="CodeDiary 是一款 IntelliJ IDEA 插件，可根据 Git 提交记录生成工作日报，也能根据代码变更生成并回填 Git 提交日志。" name="description" th:content="${description}">
+    <title th:text="${title}">CodeDiary - AI 生成 Git 提交日志与工作日报</title>
+    <meta content="CodeDiary 是一款 IntelliJ IDEA 插件，可先根据代码变更生成并回填 Git 提交日志，再根据 Git 提交记录生成工作日报。" name="description" th:content="${description}">
     <link href="/images/codeDiary.svg" rel="icon" type="image/svg+xml">
     <link crossorigin="anonymous" href="https://gw.alipayobjects.com/os/k/font/lxgwwenkaiscreenr.css" rel="stylesheet">
     <style>
@@ -460,14 +460,14 @@
     <section class="hero">
         <div class="container">
             <img alt="CodeDiary" class="hero-logo" src="/images/codeDiary.svg">
-            <h1>让提交变成日报，让改动变成日志</h1>
+            <h1>通过 AI 生成 Git 提交日志和工作报告</h1>
             <p class="hero-subtitle">
-                CodeDiary 直接工作在 IntelliJ IDEA 里：把真实 Git 提交整理成清晰的工作日报，也能读取已选代码变更，生成符合项目习惯的提交日志。少切换工具，把时间留给代码。
+                CodeDiary 直接工作在 IntelliJ IDEA 里：先读取已选代码变更，生成符合项目习惯的提交日志；再把真实 Git 提交整理成清晰的工作日报。少切换工具，把时间留给代码。
             </p>
             
             <div class="tags">
-                <span class="tag">日报生成</span>
                 <span class="tag">Commit Message</span>
+                <span class="tag">日报生成</span>
                 <span class="tag">多仓库</span>
                 <span class="tag">IntelliJ IDEA</span>
             </div>
@@ -487,17 +487,17 @@
     <section class="features" id="features">
         <div class="container">
             <h2 class="section-title">围绕 Git 的两条日常工作流</h2>
-            <p class="section-intro">写完代码后，CodeDiary 接住最容易打断思路的两件小事：整理今天做了什么，以及说明这次改了什么。</p>
+            <p class="section-intro">写完代码后，CodeDiary 接住最容易打断思路的两件小事：先说明这次改了什么，再整理今天做了什么。</p>
             <div class="feature-grid">
-                <article class="feature-card">
-                    <span class="feature-label">提交记录 → 工作日报</span>
-                    <h3>从真实提交生成日报</h3>
-                    <p>读取所选提交的完整信息，按项目分别交给 AI 总结。技术改动会被整理成清晰、可编辑的工作内容，生成后可直接复制。</p>
-                </article>
                 <article class="feature-card">
                     <span class="feature-label">代码变更 → Commit Message</span>
                     <h3>从代码差异生成提交日志</h3>
                     <p>在 Commit 面板勾选本次变更，CodeDiary 会结合文件清单、代码差异和最近提交风格，生成提交日志并回填输入框。</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-label">提交记录 → 工作日报</span>
+                    <h3>从真实提交生成日报</h3>
+                    <p>读取所选提交的完整信息，按项目分别交给 AI 总结。技术改动会被整理成清晰、可编辑的工作内容，生成后可直接复制。</p>
                 </article>
                 <article class="feature-card">
                     <span class="feature-label">多仓库</span>
@@ -543,15 +543,15 @@
                     </p>
                 </div>
                 <div class="feature-item">
-                    <h3>生成工作日报</h3>
-                    <p>
-                        点击工具栏 CodeDiary 图标 → 选择时间范围和提交记录 → 点击生成 → 复制粘贴到汇报系统
-                    </p>
-                </div>
-                <div class="feature-item">
                     <h3>生成 Git 提交日志</h3>
                     <p>
                         在 Commit 面板勾选代码变更 → 点击 CodeDiary 图标 → 等待生成结果自动回填提交消息输入框
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h3>生成工作日报</h3>
+                    <p>
+                        点击工具栏 CodeDiary 图标 → 选择时间范围和提交记录 → 点击生成 → 复制粘贴到汇报系统
                     </p>
                 </div>
             </div>
