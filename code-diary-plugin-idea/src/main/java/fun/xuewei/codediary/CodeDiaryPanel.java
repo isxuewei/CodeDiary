@@ -198,10 +198,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
     private void scanRepositoriesAsync() {
         long currentScan = ++querySequence;
         repositoriesScanned = false;
-        commitListPanel.removeAll();
-        commitListPanel.add(new JLabel("正在扫描 Git 仓库..."));
-        commitListPanel.revalidate();
-        commitListPanel.repaint();
+        showCenteredStatus("正在扫描 Git 仓库…");
         refreshButton.setEnabled(false);
         generateButton.setEnabled(false);
         selectAllCheckBox.setSelected(false);
@@ -366,10 +363,7 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         long endMillis = endOfDay(end);
 
         // 立即显示「加载中」，让用户看到有反应
-        commitListPanel.removeAll();
-        commitListPanel.add(new JLabel("加载中..."));
-        commitListPanel.revalidate();
-        commitListPanel.repaint();
+        showCenteredStatus("正在加载提交记录…");
         listScrollPane.revalidate();
         listScrollPane.repaint();
         refreshButton.setEnabled(false);
@@ -397,28 +391,10 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
     private void applyCommitList(List<CommitInfo> commits) {
         commitListPanel.removeAll();
         if (commits.isEmpty()) {
-            JLabel emptyHint = new JLabel("该时间范围内暂无提交记录");
-            emptyHint.setForeground(new Color(128, 128, 128));
-            commitListPanel.add(emptyHint);
-            commitListPanel.add(Box.createVerticalStrut(JBUI.scale(8)));
-            JLabel hintTitle = new JLabel("请确认：");
-            hintTitle.setForeground(new Color(128, 128, 128));
-            hintTitle.setFont(hintTitle.getFont().deriveFont(11f));
-            commitListPanel.add(hintTitle);
-            int leftGap = JBUI.scale(12);
-            String[] hints = {
-                "项目目录或任意子目录中存在 Git 仓库",
-                "已配置 git user.name / user.email",
-                "所选日期内有您的提交"
-            };
-            for (String h : hints) {
-                JLabel line = new JLabel("  • " + h);
-                line.setForeground(new Color(128, 128, 128));
-                line.setFont(line.getFont().deriveFont(11f));
-                line.setBorder(BorderFactory.createEmptyBorder(0, leftGap, 0, 0));
-                commitListPanel.add(line);
-            }
+            commitListPanel.setLayout(new BorderLayout());
+            commitListPanel.add(createEmptyState(), BorderLayout.CENTER);
         } else {
+            commitListPanel.setLayout(new BoxLayout(commitListPanel, BoxLayout.Y_AXIS));
             SimpleDateFormat timeFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
             boolean showRepositoryName = repositories.size() > 1 && repositoryCombo.getSelectedIndex() == 0;
 
@@ -472,6 +448,47 @@ public class CodeDiaryPanel extends SimpleToolWindowPanel {
         listScrollPane.repaint();
         refreshButton.setEnabled(true);
         updateSelectAllState();
+    }
+
+    private JPanel createEmptyState() {
+        Color secondaryTextColor = UIManager.getColor("Label.disabledForeground");
+        if (secondaryTextColor == null) {
+            secondaryTextColor = new Color(128, 128, 128);
+        }
+
+        Font textFont = JBFont.label();
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+
+        JLabel title = new JLabel("暂无提交记录");
+        title.setAlignmentX(Component.CENTER_ALIGNMENT);
+        title.setFont(textFont.deriveFont(Font.BOLD));
+        content.add(title);
+        content.add(Box.createVerticalStrut(JBUI.scale(8)));
+
+        JLabel description = new JLabel("请调整时间范围，或检查 Git 仓库与用户配置");
+        description.setAlignmentX(Component.CENTER_ALIGNMENT);
+        description.setFont(textFont);
+        description.setForeground(secondaryTextColor);
+        content.add(description);
+
+        JPanel centered = new JPanel(new GridBagLayout());
+        centered.add(content);
+        return centered;
+    }
+
+    private void showCenteredStatus(String message) {
+        commitListPanel.removeAll();
+        commitListPanel.setLayout(new GridBagLayout());
+        JLabel status = new JLabel(message);
+        status.setFont(JBFont.label());
+        Color secondaryTextColor = UIManager.getColor("Label.disabledForeground");
+        if (secondaryTextColor != null) {
+            status.setForeground(secondaryTextColor);
+        }
+        commitListPanel.add(status);
+        commitListPanel.revalidate();
+        commitListPanel.repaint();
     }
 
     private void setAllCommitsSelected(boolean selected) {
