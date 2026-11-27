@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>fun.xuewei.codediary</groupId>
     <artifactId>code-diary-server</artifactId>
-    <version>26.08.12</version>
+    <version>26.11.27</version>
     <name>CodeDiaryServer</name>
     <description>IDEA 插件 CodeDiaryServer 代码日记服务端</description>
 
